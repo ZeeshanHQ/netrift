@@ -1,0 +1,8 @@
+colorama
+rich
+argparse
+socket
+subprocess
+paramiko
+requests
+pyfiglet
