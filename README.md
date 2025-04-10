@@ -42,7 +42,7 @@ NETRIFT is engineered for efficiency, simplicity, and speed, empowering you to i
 
 ## **Installation**
 
-To get started, follow these simple steps:
+> To get started, follow these simple steps:
 
 1. **Clone the Repository:**  
    Clone the **NETRIFT** repository from GitHub to your local machine.
