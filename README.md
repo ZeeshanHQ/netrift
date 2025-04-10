@@ -107,6 +107,6 @@ If you have any questions, suggestions, or need support, feel free to reach out:
 
 - **Email:** [ZeeshanExpert26@gmail.com]
 
-- **Website:** [Comming Soon]
+- **Website:** [Coming Soon]
 
 ---
