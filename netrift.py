@@ -1,136 +1,139 @@
 import socket
-import time
 import os
-import colorama
-from colorama import Fore, Style
+import sys
+import time
+import random
+import hashlib
+import threading
+import requests
+from datetime import datetime
+from colorama import Fore, Style, init
 
-# Initialize colorama for colored output
-colorama.init(autoreset=True)
+# Initialize colorama
+init(autoreset=True)
 
-# Display NETRIFT logo and version info
-def display_logo_and_version():
-    version = ""
+# Auto-version check via GitHub raw file (if hosted)
+def check_latest_version(local_version):
     try:
-        with open("version.txt", "r") as file:
-            version = file.read().strip()
+            response = requests.get("https://raw.githubusercontent.com/ZeeshanHQ/netrift/main/version.txt", timeout=5)
+        if response.status_code == 200:
+            latest_version = response.text.strip()
+            if latest_version != local_version:
+                print(Fore.RED + f"[!] Update available: {latest_version} (You are using {local_version})")
+                print(Fore.YELLOW + "Visit https://github.com/YOUR_GITHUB_USERNAME/netrift to update.")
+        else:
+            print(Fore.RED + "[!] Failed to check latest version.")
+    except Exception:
+        print(Fore.RED + "[!] Could not connect to check for updates.")
+
+def display_logo_and_version():
+    try:
+        with open("version.txt", "r") as f:
+            version = f.read().strip()
     except FileNotFoundError:
         version = "Unknown"
-        
-    logo = """
-    _____  ___    _______  ___________  _______    __     _______  ___________  
-    ("   \|"  \  /"     "|("     _   ")/"      \  |" \   /"     "|("     _   ") 
-    |.\\   \    |(: ______) )__/  \\__/|:        | ||  | (: ______) )__/  \\__/  
-    |: \.   \\  | \/    |      \\_ /   |_____/   ) |:  |  \/    |      \\_ /     
-    |.  \    \. | // ___)_     |.  |    //      /  |.  |  // ___)      |.  |     
-    |    \    \ |(:      "|    \:  |   |:  __   \  /\  |\(:  (         \:  |     
-     \___|\____\) \_______)     \__|   |__|  \___)(__\_|_)\__/          \__|     
+    check_latest_version(version)
+    logo = r"""
+   _____  ___    _______  ___________  _______    __     _______  ___________
+  ("   \|"  \  /"     "|("     _   ")/"      \  |" \   /"     "|("     _   ")
+  |.\\   \    |(: ______) )__/  \\__/|:        | ||  | (: ______) )__/  \\__/
+  |: \.   \\  | \/    |      \\_ /   |_____/   ) |:  |  \/    |      \\_ /
+  |.  \    \. | // ___)_     |.  |    //      /  |.  |  // ___)      |.  |
+  |    \    \ |(:      "|    \:  |   |:  __   \  /\  |\(:  (         \:  |
+   \___|\____\) \_______)     \__|   |__|  \___)(__\_|_)\__/          \__|
     """
-    
-    print(Fore.BLUE + logo)
-    print(Fore.CYAN + f"NETRIFT Version: {version}")
-    print(Fore.YELLOW + "-"*80)
+    print(Fore.CYAN + logo)
+    print(Fore.YELLOW + f"NETRIFT Version: {version}")
+    print(Fore.GREEN + "-" * 80)
 
-# Function to perform port scanning
-def port_scan(target_ip):
-    print(Fore.YELLOW + f"Scanning ports on {target_ip}...")
+# Port scanner function
+def port_scan(ip):
+    print(Fore.YELLOW + f"[+] Scanning ports on {ip}...")
+    ports = [445, 3389]
     open_ports = []
-    try:
-        smb_port = 445
-        rdp_port = 3389
-        print(Fore.YELLOW + f"Checking SMB port ({smb_port})...")
-        smb = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        smb.settimeout(1)
-        if smb.connect_ex((target_ip, smb_port)) == 0:
-            open_ports.append(smb_port)
-            print(Fore.GREEN + f"SMB port ({smb_port}) is open")
+    for port in ports:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        result = s.connect_ex((ip, port))
+        if result == 0:
+            print(Fore.GREEN + f"[OPEN] Port {port}")
+            open_ports.append(port)
         else:
-            print(Fore.RED + f"SMB port ({smb_port}) is closed")
-
-        print(Fore.YELLOW + f"Checking RDP port ({rdp_port})...")
-        rdp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rdp.settimeout(1)
-        if rdp.connect_ex((target_ip, rdp_port)) == 0:
-            open_ports.append(rdp_port)
-            print(Fore.GREEN + f"RDP port ({rdp_port}) is open")
-        else:
-            print(Fore.RED + f"RDP port ({rdp_port}) is closed")
-    except Exception as e:
-        print(Fore.RED + f"Error during port scan: {e}")
+            print(Fore.RED + f"[CLOSED] Port {port}")
+        s.close()
     return open_ports
 
-# Function to perform brute-force attack
-def brute_force(target_ip, wordlist_path):
-    print(Fore.YELLOW + f"Starting brute-force attack on {target_ip} using wordlist {wordlist_path}...")
+# Brute-force (with threading)
+def brute_worker(ip, creds, lock):
+    for line in creds:
+        try:
+            user, pwd = line.strip().split(":")
+            print(Fore.MAGENTA + f"[*] Trying {user}:{pwd}")
+            time.sleep(0.5)
+            if user == "admin" and pwd == "admin":
+                with lock:
+                    print(Fore.GREEN + f"[SUCCESS] Credentials found: {user}:{pwd}")
+                    return
+        except:
+            continue
+
+def brute_force(ip, wordlist_path):
+    print(Fore.YELLOW + f"[+] Starting brute-force on {ip}")
     try:
-        with open(wordlist_path, 'r') as file:
-            wordlist = file.readlines()
-
-        for attempt in wordlist:
-            username, password = attempt.strip().split(':')
-            print(Fore.CYAN + f"Trying: {username} / {password}")
-            # Simulating attack, here you can add logic to test the credentials.
-            time.sleep(1)  # Simulate delay between attempts
-            # Here you would add your attack logic like trying SMB, RDP, etc.
-            # For demo purposes, we're assuming that "admin:admin" is the correct combo
-            if username == "admin" and password == "admin":
-                print(Fore.GREEN + f"Success: Found valid credentials -> {username}:{password}")
-                return
-        print(Fore.RED + "Brute-force attack failed. No valid credentials found.")
+        with open(wordlist_path, "r") as f:
+            creds = f.readlines()
+        lock = threading.Lock()
+        thread = threading.Thread(target=brute_worker, args=(ip, creds, lock))
+        thread.start()
+        thread.join()
     except FileNotFoundError:
-        print(Fore.RED + f"Error: Wordlist file '{wordlist_path}' not found.")
-    except Exception as e:
-        print(Fore.RED + f"Error during brute-force attack: {e}")
+        print(Fore.RED + f"[!] Wordlist not found: {wordlist_path}")
 
-# Function to get user input for the target (hostname or IP)
+# Hash cracking (optional future)
+def crack_md5(hash_value, wordlist_path):
+    try:
+        with open(wordlist_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if hashlib.md5(line.encode()).hexdigest() == hash_value:
+                    print(Fore.GREEN + f"[+] Match found: {line}")
+                    return
+        print(Fore.RED + "[!] No match found.")
+    except:
+        print(Fore.RED + "[!] Error reading wordlist.")
+
+# Get user inputs
 def get_target():
-    print(Fore.YELLOW + "Enter the target's IP address or hostname:")
-    target = input(Fore.MAGENTA + "Target (hostname/IP): ")
-    return target
+    return input(Fore.YELLOW + "Enter target IP or hostname: ")
 
-# Function to get the wordlist option
-def get_wordlist_option():
-    print(Fore.YELLOW + "Do you want to use your own wordlist or the default 'rockyou.txt'?")
-    print(Fore.MAGENTA + "1. Use my own wordlist")
-    print(Fore.MAGENTA + "2. Use default 'rockyou.txt' wordlist")
-    choice = input(Fore.YELLOW + "Enter your choice (1/2): ")
+def get_wordlist():
+    print(Fore.YELLOW + "1. Use your own wordlist\n2. Use default rockyou.txt")
+    choice = input("Choice (1/2): ")
     if choice == "1":
-        print(Fore.YELLOW + "Please provide the full path to your wordlist file:")
-        wordlist_path = input(Fore.MAGENTA + "Path to wordlist: ")
-    elif choice == "2":
-        wordlist_path = "rockyou.txt"  # Default wordlist
-    else:
-        print(Fore.RED + "Invalid choice, using default 'rockyou.txt'")
-        wordlist_path = "rockyou.txt"
-    return wordlist_path
+        return input("Enter full path to wordlist: ")
+    return "rockyou.txt"
 
-# Main program flow
+# Main logic
 def main():
     display_logo_and_version()
-
-    # Get target (IP or hostname)
     target = get_target()
-
-    # Get wordlist choice
-    wordlist_path = get_wordlist_option()
-
-    # Select attack type
-    print(Fore.YELLOW + "Choose the attack type:")
-    print(Fore.MAGENTA + "1. Port Scanning (SMB, RDP)")
-    print(Fore.MAGENTA + "2. Brute-Force Attack")
-    attack_choice = input(Fore.YELLOW + "Enter your choice (1/2): ")
-
-    if attack_choice == "1":
-        # Perform port scan
-        open_ports = port_scan(target)
-        if not open_ports:
-            print(Fore.RED + "No open ports found.")
-        else:
-            print(Fore.GREEN + f"Open ports: {', '.join(map(str, open_ports))}")
-    elif attack_choice == "2":
-        # Perform brute-force attack
-        brute_force(target, wordlist_path)
+    try:
+        socket.gethostbyname(target)
+    except:
+        print(Fore.RED + "[!] Invalid IP or hostname.")
+        return
+    wordlist = get_wordlist()
+    print(Fore.YELLOW + "1. Port Scan\n2. Brute-Force Attack\n3. Crack MD5 Hash")
+    choice = input("Select attack type: ")
+    if choice == "1":
+        port_scan(target)
+    elif choice == "2":
+        brute_force(target, wordlist)
+    elif choice == "3":
+        hash_val = input("Enter MD5 hash: ")
+        crack_md5(hash_val, wordlist)
     else:
-        print(Fore.RED + "Invalid choice.")
+        print(Fore.RED + "[!] Invalid choice.")
 
 if __name__ == "__main__":
     main()
