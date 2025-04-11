@@ -15,7 +15,7 @@ init(autoreset=True)
 # Auto-version check via GitHub raw file (if hosted)
 def check_latest_version(local_version):
     try:
-            response = requests.get("https://raw.githubusercontent.com/ZeeshanHQ/netrift/main/version.txt", timeout=5)
+        response = requests.get("https://raw.githubusercontent.com/ZeeshanHQ/netrift/main/version.txt", timeout=5)
         if response.status_code == 200:
             latest_version = response.text.strip()
             if latest_version != local_version:
